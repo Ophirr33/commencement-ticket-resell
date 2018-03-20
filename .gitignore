@@ -1,0 +1,5 @@
+.env
+data.db
+/target
+/static
+**/*.rs.bk
