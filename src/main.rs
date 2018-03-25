@@ -1,4 +1,5 @@
 #![feature(conservative_impl_trait)]
+#[macro_use] extern crate clap;
 #[macro_use] extern crate diesel;
 #[macro_use] extern crate failure;
 #[macro_use] extern crate log;
@@ -23,6 +24,7 @@ extern crate serde_json;
 
 use actix::prelude::*;
 use actix_web::*;
+use clap::ArgMatches;
 use chrono::NaiveDateTime;
 use diesel::SqliteConnection;
 use diesel::prelude::*;
@@ -36,6 +38,58 @@ use std::ops::Deref;
 use std::str::FromStr;
 use openssl::ssl::{SslMethod, SslAcceptor, SslFiletype};
 
+#[derive(Debug, Clone)]
+enum Emailer {
+    Mock,
+    Gmail{ gmail_username: String, gmail_password: String }
+}
+
+impl Emailer {
+    fn send_token(&self, domain: &str, username: &str, token:  i64)
+        -> Result<()>
+    {
+        use lettre_email::EmailBuilder;
+        use lettre::EmailTransport;
+        use lettre::smtp::{ClientSecurity, SmtpTransportBuilder};
+        use lettre::smtp::client::net::ClientTlsParameters;
+        use lettre::smtp::authentication::Credentials;
+        use native_tls::TlsConnector;
+        let gmail_username = match self {
+            &Emailer::Mock => "mock-emailer@localhost",
+            &Emailer::Gmail{ ref gmail_username, .. } => gmail_username
+        };
+        let email = EmailBuilder::new()
+            .to(format!("{}@husky.neu.edu", username))
+            .from(format!("{}", gmail_username))
+            .subject("Commencement Ticket Resell Confirmation")
+            .text(format!("Hey {}, thanks for registering. Login with this url {}",
+                          username,
+                          format!("https://{}/api/confirm?username={}&token={}",
+                                  domain, username, token)))
+            .build()
+            .map_err(DescError::from)?;
+        match self {
+            &Emailer::Gmail { ref gmail_password, .. } => {
+                info!("Built email!");
+                let connector = TlsConnector::builder().unwrap().build().unwrap();
+                let security = ClientSecurity::Opportunistic(
+                    ClientTlsParameters::new("smtp.gmail.com".into(), connector));
+                let mut transport = SmtpTransportBuilder::new("smtp.gmail.com:587", security)
+                    .map_err(DescError::from)?
+                    .credentials(Credentials::new(gmail_username.to_owned(),
+                    gmail_password.to_owned()))
+                    .build();
+                info!("Sending email!");
+                transport.send(&email).map_err(DescError::from)?;
+                Ok(())
+            },
+            &Emailer::Mock => {
+                info!("Mock emailer would have sent the following email: {:?}", email);
+                Ok(())
+            }
+        }
+    }
+}
 
 // ================ CONFIGURATION =================
 #[derive(Debug, Clone)]
@@ -43,27 +97,50 @@ struct Properties {
     bind_to: String,
     db: String,
     domain: String,
-    gmail_username: String,
-    gmail_password: String,
-    static_directory: String
+    emailer: Emailer,
+    static_directory: String,
+    index_file: String
 }
 
-impl Properties {
-    fn new() -> Self {
-        use std::env;
-        let bind_to = env::var("COMMENCEMENT_BIND_TO").unwrap_or("webapp".into());
-        let gmail_username = env::var("GMAIL_USERNAME").unwrap();
-        let gmail_password = env::var("GMAIL_PASSWORD").unwrap();
-        let static_directory = env::var("COMMENCEMENT_STATIC_DIR").unwrap_or("webapp".into());
-        let domain = env::var("COMMENCEMENT_DOMAIN").unwrap_or("localhost:8080".into());
-        Properties {
-            bind_to: bind_to,
-            db: "data.db".into(),
-            domain: domain,
-            gmail_username: gmail_username,
-            gmail_password: gmail_password,
-            static_directory
-        }
+impl<'a> From<ArgMatches<'a>> for Properties {
+    fn from(args: ArgMatches<'a>) -> Self {
+        let db = args.value_of("DB").map(|s|s.to_owned()).unwrap_or_else(|| {
+            info!("No db path specified, using default value of data.db");
+            "data.db".to_owned()
+        });
+        let port = args.value_of("PORT").unwrap_or_else(|| {
+            info!("No port specified, using default value of 8080");
+            "8080"
+        });
+        let addr = args.value_of("ADDR").unwrap_or_else(|| {
+            info!("No address specified, using default value of 127.0.0.1");
+            "127.0.0.1"
+        });
+        let domain = args.value_of("DOMAIN").map(|s|s.to_owned()).unwrap_or_else(|| {
+            info!("No domain specified, using default value of localhost");
+            "localhost".to_owned()
+        });
+        let static_directory = args.value_of("STATIC")
+            .map(|s|s.to_owned())
+            .unwrap_or_else(|| {
+                info!("No static directory specified, using default value of webapp");
+                "webapp".to_owned()
+        });
+        let index_file = args.value_of("INDEX").map(|s|s.to_owned()).unwrap_or_else(|| {
+                info!("No index file specified, using default value of index.html");
+                "index.html".to_owned()
+        });
+        let bind_to = format!("{}:{}", addr, port);
+        let emailer = match (args.value_of("USERNAME"), args.value_of("PASSWORD")) {
+            (Some(u), Some(p)) => {
+                Emailer::Gmail{ gmail_username: u.to_owned(), gmail_password: p.to_owned() }
+            },
+            _ => {
+                info!("No gmailer username and password specified, using mock emailer");
+                Emailer::Mock
+            }
+        };
+        Properties { bind_to, db, domain, emailer, static_directory, index_file }
     }
 }
 
@@ -225,39 +302,6 @@ impl<E: std::error::Error> From<E> for DescError {
     }
 }
 
-fn send_token(properties: &Properties, username: &str, token:  i64) -> Result<()> {
-    use lettre_email::EmailBuilder;
-    use lettre::EmailTransport;
-    use lettre::smtp::{ClientSecurity, SmtpTransportBuilder};
-    use lettre::smtp::client::net::ClientTlsParameters;
-    use lettre::smtp::authentication::Credentials;
-    use native_tls::TlsConnector;
-    let email = EmailBuilder::new()
-        .to(format!("{}@husky.neu.edu", username))
-        .from(format!("{}", properties.gmail_username))
-        .subject("Commencement Ticket Resell Confirmation")
-        .text(format!("Hey {}, thanks for registering. Login with this url {}",
-                      username,
-                      format!("https://{}/api/confirm?username={}&token={}",
-                              properties.domain, username, token)))
-        .build()
-        .map_err(DescError::from)?;
-    info!("Built email!");
-    let connector = TlsConnector::builder().unwrap().build().unwrap();
-    info!("Built connector!");
-    let security = ClientSecurity::Opportunistic(
-        ClientTlsParameters::new("smtp.gmail.com".into(), connector));
-    info!("Built security!");
-    let mut transport = SmtpTransportBuilder::new("smtp.gmail.com:587", security)
-        .map_err(DescError::from)?
-        .credentials(Credentials::new(properties.gmail_username.to_owned(),
-                                      properties.gmail_password.to_owned()))
-        .build();
-    info!("Sending email!");
-    transport.send(&email).map_err(DescError::from)?;
-    Ok(())
-}
-
 impl Handler<CreateUser> for DbHandler {
     type Result = <CreateUser as Message>::Result;
 
@@ -277,7 +321,7 @@ impl Handler<CreateUser> for DbHandler {
         };
         let mut rng = rand::thread_rng();
         let token: i64 = rng.gen();
-        send_token(&self.properties, &msg.username, token)?;
+        &self.properties.emailer.send_token(&self.properties.domain, &msg.username, token)?;
         insert_into(users)
             .values((access_id.eq(token),
                      username.eq(&msg.username),
@@ -432,7 +476,7 @@ fn make_app(addr: &Addr<Syn, DbHandler>, properties: &Properties) -> Application
                     .header("X-Frame-Options", "Deny")
                     .finish())
         .handler("/", fs::StaticFiles::new(&format!("./{}", properties.static_directory), true)
-                 .index_file("index.html"))
+                 .index_file(properties.index_file.to_owned()))
         .resource("/api/sign-up", |r| {
             r.method(Method::POST).a(generic_req::<CreateUser, bool>)
         })
@@ -453,7 +497,21 @@ fn make_app(addr: &Addr<Syn, DbHandler>, properties: &Properties) -> Application
 fn main() {
     loggerv::init_with_level(log::Level::Info).unwrap();
     let sys = System::new("commencement-tickets");
-    let properties = Properties::new();
+    let properties: Properties = clap_app!(myapp =>
+        (version: "1.0")
+        (author: "Ty Coghlan <coghlan.ty@gmail.com>")
+        (about: "Simple web server for NEU Commencement Ticket Resell")
+        (@arg DB: --db +takes_value "Sets the sqlite3 database path")
+        (@arg PORT: -p --port +takes_value "Sets the port for the webserver")
+        (@arg ADDR: --addr +takes_value "Sets the address the webserver will bind to")
+        (@arg DOMAIN: --domain +takes_value "Sets the dns domain used in email confirmations")
+        (@arg STATIC: --static +takes_value "Sets the path to the statically served files")
+        (@arg INDEX: --index +takes_value "Sets the index file for the website")
+        (@arg USERNAME: --username +takes_value
+                              "Sets the gmail username used for sending confirmations")
+        (@arg PASSWORD: --password +takes_value
+                              "Sets the gmail password used for sending confirmations")
+        ).get_matches().into();
     let pclone = properties.clone();
     let pclone2 = properties.clone();
     info!("Using properties: {:?}", properties);

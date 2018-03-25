@@ -6,6 +6,7 @@ authors = ["Ty Coghlan <Coghlan.Ty@gmail.com>"]
 [dependencies]
 actix = "0.5"
 actix-web = { version = "0.4", features = ["alpn"] }
+clap = "~2.27.0"
 chrono = { version = "0.4", features = ["serde"] }
 config = "0.8"
 diesel = { version = "1.1.0", features = ["sqlite", "chrono"] }
