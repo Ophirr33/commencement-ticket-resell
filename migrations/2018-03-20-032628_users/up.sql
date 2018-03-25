@@ -1,7 +1,6 @@
 CREATE TABLE users (
   access_id BIGINT NOT NULL,
   username TEXT UNIQUE NOT NULL,
-  display_name TEXT NOT NULL,
   buying INTEGER NOT NULL,
   selling INTEGER NOT NULL,
   confirmed INTEGER NOT NULL,

@@ -1,5 +1,7 @@
 .env
+run_with_password.sh
 data.db
+data.db*
 /target
 /static
 **/*.rs.bk

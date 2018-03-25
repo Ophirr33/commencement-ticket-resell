@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<title>NEU Commencement Ticket Resell</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<link rel="stylesheet" href="styles.css">
+<body>
+
+    <div class="wrapper" style="hidden">
+        <div class="white-on-black" id="title">
+            <h1> NEU Graduation Ticket Resell </h1>
+        </div>
+
+        <div id="settings-wrapper">
+            <h2> User Settings </h2>
+            <div id="settings" class="responsive-list">
+                <div id="settings-header" class="black-on-white responsive-list-item">
+                    <h2>coghlan.t </h2>
+                    <button class="settings-button black-on-white">⚙</button>
+                </div>
+                <div id="settings-box" class="">
+                    <div class="responsive-list-item white-on-black">
+                        <h2>Buying:</h2>
+                        <input placeholder="0" class="settings-input" id="buying" type="number">
+                    </div>
+                    <div class="responsive-list-item">
+                        <h2>Selling:</h2>
+                        <input placeholder="0" class="settings-input" id="selling" type="number">
+                    </div>
+                    <div class="responsive-list-item white-on-black">
+                        <button id="set-user" class="settings-button white-on-black">
+                            Set Buying/Selling
+                        </button>
+                    </div>
+                    <div class="responsive-list-item black-on-white">
+                        <button id="delete-user-button" class="settings-button black-on-white">
+                            Delete Account
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="list-wrapper" style="hidden">
+            <h2>Buyers and Sellers</h2>
+
+            <div class="responsive-list wider"> </div>
+        </div>
+
+        <div id="sign-up-wrapper" style="hidden">
+            <h2> Sign Up </h2>
+            <div id="sign-up" class="responsive-list wider">
+                    <div class="responsive-list-item white-on-black">
+                        <h2>Husky Username:</h2>
+                        <span class="settings-input">
+                        <input id="username-sign-up" placeholder="lastname.f" class="settings-input" type="text">
+                        @husky.neu.edu</span>
+                    </div>
+                    <div class="responsive-list-item">
+                        <h2>Buying:</h2>
+                        <input id="buying-sign-up" placeholder="0" class="settings-input" type="number">
+                    </div>
+                    <div class="responsive-list-item white-on-black">
+                        <h2>Selling:</h2>
+                        <input id="selling-sign-up" placeholder="0" class="settings-input" type="number">
+                    </div>
+                    <div class="responsive-list-item black-on-white">
+                        <button id="sign-up-button" class="settings-button black-on-white">
+                            Sign-Up
+                        </button>
+                    </div>
+            </div>
+        </div>
+
+        <div class="white-on-black" id="footer">
+            <span>
+                @ 2018 Ty,
+                <a id="source-link"
+                   href="https://github.com/ophirr33/commencement-resell"
+                   rel="noopener noreferrer"
+                   target="_blank">
+                    Source Code
+                </a>
+            </span>
+        </div>
+    </div>
+
+<script src="script.js"></script>
+</body>
+</html>
