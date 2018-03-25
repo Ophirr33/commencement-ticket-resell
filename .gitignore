@@ -5,3 +5,9 @@ data.db*
 /target
 /static
 **/*.rs.bk
+node_modules/
+jspm_packages/
+typings/
+.npm
+dist/
+
