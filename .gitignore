@@ -1,5 +1,8 @@
 .env
 run_with_password.sh
+cert.pem
+key.pem
+doctl-create.sh
 data.db
 data.db*
 /target

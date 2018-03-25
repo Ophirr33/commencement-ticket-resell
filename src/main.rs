@@ -14,9 +14,10 @@ extern crate lettre_email;
 extern crate loggerv;
 extern crate native_tls;
 extern crate num_cpus;
-extern crate rand;
+extern crate openssl;
 extern crate r2d2;
 extern crate r2d2_diesel;
+extern crate rand;
 extern crate serde;
 extern crate serde_json;
 
@@ -33,6 +34,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;
+use openssl::ssl::{SslMethod, SslAcceptor, SslFiletype};
 
 
 // ================ CONFIGURATION =================
@@ -42,20 +44,25 @@ struct Properties {
     db: String,
     domain: String,
     gmail_username: String,
-    gmail_password: String
+    gmail_password: String,
+    static_directory: String
 }
 
 impl Properties {
     fn new() -> Self {
         use std::env;
+        let bind_to = env::var("COMMENCEMENT_BIND_TO").unwrap_or("webapp".into());
         let gmail_username = env::var("GMAIL_USERNAME").unwrap();
         let gmail_password = env::var("GMAIL_PASSWORD").unwrap();
+        let static_directory = env::var("COMMENCEMENT_STATIC_DIR").unwrap_or("webapp".into());
+        let domain = env::var("COMMENCEMENT_DOMAIN").unwrap_or("localhost:8080".into());
         Properties {
-            bind_to: "127.0.0.2:8080".into(),
+            bind_to: bind_to,
             db: "data.db".into(),
-            domain: "localhost:8080".into(),
+            domain: domain,
             gmail_username: gmail_username,
             gmail_password: gmail_password,
+            static_directory
         }
     }
 }
@@ -415,10 +422,16 @@ struct State {
     addr: Addr<Syn, DbHandler>
 }
 
-fn make_app(addr: &Addr<Syn, DbHandler>) -> Application<State> {
+fn make_app(addr: &Addr<Syn, DbHandler>, properties: &Properties) -> Application<State> {
     Application::with_state(State{addr: addr.clone()})
         .middleware(middleware::Logger::default())
-        .handler("/", fs::StaticFiles::new("./webapp", true)
+        .middleware(middleware::DefaultHeaders::build()
+                    .header("Referrer-Policy", "no-referrer")
+                    .header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+                    .header("Vary", "Upgrade-Insecure-Requests")
+                    .header("X-Frame-Options", "Deny")
+                    .finish())
+        .handler("/", fs::StaticFiles::new(&format!("./{}", properties.static_directory), true)
                  .index_file("index.html"))
         .resource("/api/sign-up", |r| {
             r.method(Method::POST).a(generic_req::<CreateUser, bool>)
@@ -442,6 +455,7 @@ fn main() {
     let sys = System::new("commencement-tickets");
     let properties = Properties::new();
     let pclone = properties.clone();
+    let pclone2 = properties.clone();
     info!("Using properties: {:?}", properties);
     let manager = ConnectionManager::<SqliteConnection>::new(properties.db);
     let conns = Pool::builder()
@@ -452,8 +466,12 @@ fn main() {
         DbHandler{ conns: conns.clone(), properties: pclone.clone() }
     });
 
-    HttpServer::new(move || make_app(&addr))
+    let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+    builder.set_private_key_file("key.pem", SslFiletype::PEM).unwrap();
+    builder.set_certificate_chain_file("cert.pem").unwrap();
+
+    HttpServer::new(move || make_app(&addr, &pclone2.clone()))
         .bind(properties.bind_to).unwrap()
-        .start();
+        .start_ssl(builder).unwrap();
     let _ = sys.run();
 }
