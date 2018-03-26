@@ -4,11 +4,13 @@ const list = document.getElementById("list-wrapper");
 const selling = document.getElementById("selling");
 const setUserButton = document.getElementById("set-user");
 const settings = document.getElementById("settings-wrapper");
+const settingsBox = document.getElementById("settings-box");
 const signUpButton = document.getElementById("sign-up-button");
 const signUpBuying = document.getElementById("buying-sign-up");
 const signUpSelling = document.getElementById("selling-sign-up");
 const signUpUsername = document.getElementById("username-sign-up");
 const signUpWrapper = document.getElementById("sign-up-wrapper");
+const toggleSettingsButton = document.getElementById("toggle-settings");
 let intervalID = undefined;
 
 function initialize() {
@@ -35,8 +37,17 @@ function mainLoop(token, username) {
     settings.style.display = "flex";
     setUserButton.onclick = () => setUser(token, username);
     deleteUserButton.onclick = () => deleteUser(token, username);
+    toggleSettingsButton.onclick = toggleSettings;
     getUsers(token, username, list);
     intervalID = window.setInterval(() => getUsers(token, username, list), 30000);
+}
+
+function toggleSettings() {
+    if (settingsBox.style.display == "none") {
+        settingsBox.style.display = "block";
+    } else {
+        settingsBox.style.display = "none";
+    }
 }
 
 function initializeSignUp() {

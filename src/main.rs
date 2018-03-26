@@ -15,7 +15,6 @@ extern crate lettre_email;
 extern crate loggerv;
 extern crate native_tls;
 extern crate num_cpus;
-extern crate openssl;
 extern crate r2d2;
 extern crate r2d2_diesel;
 extern crate rand;
@@ -36,7 +35,6 @@ use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;
-use openssl::ssl::{SslMethod, SslAcceptor, SslFiletype};
 
 #[derive(Debug, Clone)]
 enum Emailer {
@@ -98,8 +96,6 @@ struct Properties {
     db: String,
     domain: String,
     emailer: Emailer,
-    static_directory: String,
-    index_file: String
 }
 
 impl<'a> From<ArgMatches<'a>> for Properties {
@@ -120,16 +116,6 @@ impl<'a> From<ArgMatches<'a>> for Properties {
             info!("No domain specified, using default value of localhost");
             "localhost".to_owned()
         });
-        let static_directory = args.value_of("STATIC")
-            .map(|s|s.to_owned())
-            .unwrap_or_else(|| {
-                info!("No static directory specified, using default value of webapp");
-                "webapp".to_owned()
-        });
-        let index_file = args.value_of("INDEX").map(|s|s.to_owned()).unwrap_or_else(|| {
-                info!("No index file specified, using default value of index.html");
-                "index.html".to_owned()
-        });
         let bind_to = format!("{}:{}", addr, port);
         let emailer = match (args.value_of("USERNAME"), args.value_of("PASSWORD")) {
             (Some(u), Some(p)) => {
@@ -140,7 +126,7 @@ impl<'a> From<ArgMatches<'a>> for Properties {
                 Emailer::Mock
             }
         };
-        Properties { bind_to, db, domain, emailer, static_directory, index_file }
+        Properties { bind_to, db, domain, emailer  }
     }
 }
 
@@ -466,7 +452,7 @@ struct State {
     addr: Addr<Syn, DbHandler>
 }
 
-fn make_app(addr: &Addr<Syn, DbHandler>, properties: &Properties) -> Application<State> {
+fn make_app(addr: &Addr<Syn, DbHandler>) -> Application<State> {
     Application::with_state(State{addr: addr.clone()})
         .middleware(middleware::Logger::default())
         .middleware(middleware::DefaultHeaders::build()
@@ -475,8 +461,6 @@ fn make_app(addr: &Addr<Syn, DbHandler>, properties: &Properties) -> Application
                     .header("Vary", "Upgrade-Insecure-Requests")
                     .header("X-Frame-Options", "Deny")
                     .finish())
-        .handler("/", fs::StaticFiles::new(&format!("./{}", properties.static_directory), true)
-                 .index_file(properties.index_file.to_owned()))
         .resource("/api/sign-up", |r| {
             r.method(Method::POST).a(generic_req::<CreateUser, bool>)
         })
@@ -497,7 +481,7 @@ fn make_app(addr: &Addr<Syn, DbHandler>, properties: &Properties) -> Application
 fn main() {
     loggerv::init_with_level(log::Level::Info).unwrap();
     let sys = System::new("commencement-tickets");
-    let properties: Properties = clap_app!(myapp =>
+    let properties: Properties = clap_app!(commencement_tickets =>
         (version: "1.0")
         (author: "Ty Coghlan <coghlan.ty@gmail.com>")
         (about: "Simple web server for NEU Commencement Ticket Resell")
@@ -505,15 +489,12 @@ fn main() {
         (@arg PORT: -p --port +takes_value "Sets the port for the webserver")
         (@arg ADDR: --addr +takes_value "Sets the address the webserver will bind to")
         (@arg DOMAIN: --domain +takes_value "Sets the dns domain used in email confirmations")
-        (@arg STATIC: --static +takes_value "Sets the path to the statically served files")
-        (@arg INDEX: --index +takes_value "Sets the index file for the website")
         (@arg USERNAME: --username +takes_value
                               "Sets the gmail username used for sending confirmations")
         (@arg PASSWORD: --password +takes_value
                               "Sets the gmail password used for sending confirmations")
         ).get_matches().into();
     let pclone = properties.clone();
-    let pclone2 = properties.clone();
     info!("Using properties: {:?}", properties);
     let manager = ConnectionManager::<SqliteConnection>::new(properties.db);
     let conns = Pool::builder()
@@ -524,12 +505,8 @@ fn main() {
         DbHandler{ conns: conns.clone(), properties: pclone.clone() }
     });
 
-    let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
-    builder.set_private_key_file("key.pem", SslFiletype::PEM).unwrap();
-    builder.set_certificate_chain_file("cert.pem").unwrap();
-
-    HttpServer::new(move || make_app(&addr, &pclone2.clone()))
+    HttpServer::new(move || make_app(&addr))
         .bind(properties.bind_to).unwrap()
-        .start_ssl(builder).unwrap();
+        .start();
     let _ = sys.run();
 }

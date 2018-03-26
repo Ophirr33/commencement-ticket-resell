@@ -1,5 +1,7 @@
 .env
 run_with_password.sh
+get_cert.sh
+install.sh
 cert.pem
 key.pem
 doctl-create.sh

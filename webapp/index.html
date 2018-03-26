@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="styles.css">
 <body>
 
-    <div class="wrapper" style="hidden">
+    <div id="wrapper" style="hidden">
         <div class="white-on-black" id="title">
             <h1> NEU Graduation Ticket Resell </h1>
         </div>
@@ -16,9 +16,9 @@
             <div id="settings" class="responsive-list">
                 <div id="settings-header" class="black-on-white responsive-list-item">
                     <h2>coghlan.t </h2>
-                    <button class="settings-button black-on-white">⚙</button>
+                    <button id="toggle-settings" class="settings-button black-on-white">⚙</button>
                 </div>
-                <div id="settings-box" class="">
+                <div id="settings-box" style="display:none">
                     <div class="responsive-list-item white-on-black">
                         <h2>Buying:</h2>
                         <input placeholder="0" class="settings-input" id="buying" type="number">
@@ -51,10 +51,11 @@
             <h2> Sign Up </h2>
             <div id="sign-up" class="responsive-list wider">
                     <div class="responsive-list-item white-on-black">
-                        <h2>Husky Username:</h2>
+                        <h2>Email:</h2>
                         <span class="settings-input">
-                        <input id="username-sign-up" placeholder="lastname.f" class="settings-input" type="text">
-                        @husky.neu.edu</span>
+                            <input id="username-sign-up" placeholder="lastname.f" class="settings-input" type="text">
+                            @husky.neu.edu
+                        </span>
                     </div>
                     <div class="responsive-list-item">
                         <h2>Buying:</h2>
