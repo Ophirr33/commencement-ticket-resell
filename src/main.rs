@@ -27,7 +27,7 @@ use clap::ArgMatches;
 use chrono::NaiveDateTime;
 use diesel::SqliteConnection;
 use diesel::prelude::*;
-use futures::future::{result, Future};
+use futures::future::Future;
 use rand::Rng;
 use r2d2::Pool;
 use r2d2_diesel::ConnectionManager;
@@ -56,14 +56,22 @@ impl Emailer {
             &Emailer::Mock => "mock-emailer@localhost",
             &Emailer::Gmail{ ref gmail_username, .. } => gmail_username
         };
+        let instructions = "Buyers and Sellers will show up with the right. \
+        Click on their username to get in touch if they have the number of \
+        tickets you’re looking to buy/sell.\n\n\
+        Use the settings box (click/tap on the gear icon) to change the number \
+        of tickets you’re looking for or if you want to delete your account.\n\n\
+        If you have any problems, shoot me an email at coghlan.t@husky.neu.edu.\n\n\
+        - Ty";
         let email = EmailBuilder::new()
             .to(format!("{}@husky.neu.edu", username))
-            .from(format!("{}", gmail_username))
+            .from(format!("{}@gmail.com", gmail_username))
             .subject("Commencement Ticket Resell Confirmation")
-            .text(format!("Hey {}, thanks for registering. Login with this url {}",
+            .text(format!("Hey {}, thanks for registering! Use this url to login: {}\n\n{}",
                           username,
-                          format!("https://{}/api/confirm?username={}&token={}",
-                                  domain, username, token)))
+                          format!("https://{}/index.html?username={}&token={}",
+                                  domain, username, token),
+                          instructions))
             .build()
             .map_err(DescError::from)?;
         match self {
@@ -179,19 +187,6 @@ struct Confirm {
     username: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     token: i64
-}
-
-impl Confirm {
-    fn from_params<'a>(params: &'a dev::Params<'a>) -> Result<Self> {
-        let username = params.get("username")
-            .map(|s| s.to_owned())
-            .ok_or(DescError::new("Missing username"))?;
-        let token = params.get("token")
-            .map(|s| s.to_owned())
-            .and_then(|t| t.parse::<i64>().ok())
-            .ok_or(DescError::new("Missing token"))?;
-        Ok(Confirm { username, token })
-    }
 }
 
 impl Message for Confirm {
@@ -417,35 +412,6 @@ fn generic_req<'a, T, R>(req: HttpRequest<State>) -> impl Future<Item=HttpRespon
     })
 }
 
-fn confirm_req(req: HttpRequest<State>) -> impl Future<Item=HttpResponse, Error=Error> {
-    let addr = req.state().addr.clone();
-    result(Confirm::from_params(req.query()))
-        .and_then(move |confirm| {
-            let cookie = format!("tokenuser:{}^{}; Path=/",
-                                 confirm.username, confirm.token);
-            addr.send(confirm)
-               .from_err()
-               .and_then(move |res: Result<bool>| {
-                   match res {
-                       Err(e) => Ok(e.cause().error_response()),
-                       Ok(b) => {
-                           let cookie = if b {
-                               cookie
-                           } else {
-                               "".into()
-                           };
-                           let resp = httpcodes::HTTPFound.build()
-                               .header("Set-Cookie", cookie)
-                               .header("Location", "/index.html")
-                               .finish()?;
-                           Ok(resp)
-                       },
-                   }
-               })
-        })
-}
-
-
 // ================ SETUP =================
 
 struct State {
@@ -473,8 +439,8 @@ fn make_app(addr: &Addr<Syn, DbHandler>) -> Application<State> {
         .resource("/api/delete-user", |r| {
             r.method(Method::POST).a(generic_req::<DeleteUser, bool>)
         })
-        .resource("/api/confirm", |r| {
-            r.method(Method::GET).a(confirm_req)
+        .resource("/api/confirm-user", |r| {
+            r.method(Method::POST).a(generic_req::<Confirm, bool>)
         })
 }
 

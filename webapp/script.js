@@ -5,6 +5,7 @@ const selling = document.getElementById("selling");
 const setUserButton = document.getElementById("set-user");
 const settings = document.getElementById("settings-wrapper");
 const settingsBox = document.getElementById("settings-box");
+const settingsUsername = document.getElementById("settings-username");
 const signUpButton = document.getElementById("sign-up-button");
 const signUpBuying = document.getElementById("buying-sign-up");
 const signUpSelling = document.getElementById("selling-sign-up");
@@ -14,18 +15,18 @@ const toggleSettingsButton = document.getElementById("toggle-settings");
 let intervalID = undefined;
 
 function initialize() {
-    let cookie = document.cookie;
-
+    let uri = (window.location + "").split("?");
     if (!isNaN(parseInt(localStorage.getItem("token")))) {
         mainLoop(localStorage.getItem("token"),
                  localStorage.getItem("username"));
-    } else if (cookie != "") {
-        let split = cookie.split(":")[1].split("^");
-        let username = split[0];
-        let token = split[1];
+    } else if (uri.length == 2) {
+        let cookie = uri[1];
+        let split = cookie.split("&");
+        let username = split[0].split("=")[1];
+        let token = split[1].split("=")[1];
         localStorage.setItem("token", token);
         localStorage.setItem("username", username);
-        mainLoop(token, username);
+        confirmUser(username, token);
     } else {
         initializeSignUp();
     }
@@ -35,11 +36,27 @@ function mainLoop(token, username) {
     signUpWrapper.style.display = "none";
     list.style.display = "flex";
     settings.style.display = "flex";
+    settingsUsername.textContent = username;
     setUserButton.onclick = () => setUser(token, username);
     deleteUserButton.onclick = () => deleteUser(token, username);
     toggleSettingsButton.onclick = toggleSettings;
     getUsers(token, username, list);
     intervalID = window.setInterval(() => getUsers(token, username, list), 30000);
+}
+
+function initializeSignUp() {
+    list.style.display = "none";
+    settings.style.display = "none";
+    signUpWrapper.style.display = "flex";
+    signUpButton.onclick = signUp;
+}
+
+function confirmUser(username, token, callback) {
+    let body = {"token": token, "username": username};
+    getJson("/api/confirm-user", body, () => {
+            window.location = "/index.html";
+            initialize();
+    });
 }
 
 function toggleSettings() {
@@ -48,13 +65,6 @@ function toggleSettings() {
     } else {
         settingsBox.style.display = "none";
     }
-}
-
-function initializeSignUp() {
-    list.style.display = "none";
-    settings.style.display = "none";
-    signUpWrapper.style.display = "flex";
-    signUpButton.onclick = signUp;
 }
 
 function deleteUser(token, username) {
@@ -131,10 +141,13 @@ function getUsers(token, username) {
             let link = document.createElement("a");
             link.setAttribute("href", `mailto:${user.username}@husky.neu.edu`)
             link.appendChild(document.createTextNode(user.username));
+            link.className = "share-row";
             let buyingSpan = document.createElement("span");
             buyingSpan.appendChild(document.createTextNode(`Buying: ${user.buying}`));
+            buyingSpan.className = "share-row";
             let sellingSpan = document.createElement("span");
             sellingSpan.appendChild(document.createTextNode(`Selling: ${user.selling}`));
+            sellingSpan.className = "share-row";
             row.appendChild(link);
             row.appendChild(buyingSpan);
             row.appendChild(sellingSpan);
