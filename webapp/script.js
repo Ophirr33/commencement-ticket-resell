@@ -16,18 +16,16 @@ let intervalID = undefined;
 
 function initialize() {
     let uri = (window.location + "").split("?");
-    if (!isNaN(parseInt(localStorage.getItem("token")))) {
-        mainLoop(localStorage.getItem("token"),
-                 localStorage.getItem("username"));
-    } else if (uri.length == 2) {
+    if (uri.length == 2) {
         let cookie = uri[1];
         let split = cookie.split("&");
         let username = split[0].split("=")[1];
         let token = split[1].split("=")[1];
-        localStorage.setItem("token", token);
-        localStorage.setItem("username", username);
         confirmUser(username, token);
-    } else {
+    } else if (!isNaN(parseInt(localStorage.getItem("token")))) {
+        mainLoop(localStorage.getItem("token"),
+                 localStorage.getItem("username"));
+    }  else {
         initializeSignUp();
     }
 }
@@ -54,6 +52,8 @@ function initializeSignUp() {
 function confirmUser(username, token, callback) {
     let body = {"token": token, "username": username};
     getJson("/api/confirm-user", body, () => {
+            localStorage.setItem("token", token);
+            localStorage.setItem("username", username);
             window.location = "/index.html";
             initialize();
     });
